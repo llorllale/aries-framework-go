@@ -24,13 +24,13 @@ func ExamplePresentationDefinitions_Match() {
 			{
 				ID: "banking",
 				Schema: &Schema{
-					URI: "https://example.context.jsonld/account",
+					URI: []string{"https://example.context.jsonld/account"},
 				},
 			},
 			{
 				ID: "residence",
 				Schema: &Schema{
-					URI: "https://example.context.jsonld/address",
+					URI: []string{"https://example.context.jsonld/address"},
 				},
 			},
 		},
