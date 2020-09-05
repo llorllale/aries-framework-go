@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/btcsuite/btcutil/base58"
 	"github.com/google/tink/go/keyset"
 	"github.com/stretchr/testify/require"
 
@@ -28,7 +27,7 @@ import (
 	"github.com/hyperledger/aries-framework-go/pkg/storage"
 )
 
-func TestAuthryptPackerSuccess(t *testing.T) {
+func TestAuthCryptPackerSuccess(t *testing.T) {
 	k := createKMS(t)
 	_, recipientsKeys, keyHandles := createRecipients(t, k, 10)
 
@@ -43,8 +42,7 @@ func TestAuthryptPackerSuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	// add sender key in store (prep step before Authcrypt.Pack()/Unpack())
-	b58SKID := base58.Encode([]byte(skid))
-	mockStoreMap[b58SKID] = senderKey
+	mockStoreMap[skid] = senderKey
 
 	origMsg := []byte("secret message")
 	ct, err := authPacker.Pack(origMsg, []byte(skid), recipientsKeys)

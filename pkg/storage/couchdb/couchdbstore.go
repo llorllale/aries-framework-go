@@ -37,6 +37,8 @@ const (
 	blankHostErrMsg           = "hostURL for new CouchDB provider can't be blank"
 	failToCloseProviderErrMsg = "failed to close provider"
 	couchDBNotFoundErr        = "Not Found:"
+
+	keyPrefix = "$"
 )
 
 // Option configures the couchdb provider.
@@ -45,13 +47,18 @@ type Option func(opts *Provider)
 // WithDBPrefix option is for adding prefix to db name.
 func WithDBPrefix(dbPrefix string) Option {
 	return func(opts *Provider) {
-		opts.dbPrefix = dbPrefix
+		opts.dbPrefix = strings.ToLower(dbPrefix)
 	}
 }
 
 // NewProvider instantiates Provider.
-// Certain stores like couchdb cannot accept key IDs with '_' prefix, to avoid getting errors with such values, key ID
-// need to be base58 encoded for these stores. In order to do so, the store must be wrapped using base58wrapper.
+// CouchDB places certain restrictions on the names of databases and the format of document IDs.
+// References:
+//   - https://docs.couchdb.org/en/latest/api/database/common.html#put--db
+//   - https://docs.couchdb.org/en/latest/api/index.html#api-reference
+//
+// For these reasons, this storage implementation transparently lower-cases the database names provided
+// and also appends the dollar ($) character as a prefix to keys.
 func NewProvider(hostURL string, opts ...Option) (*Provider, error) {
 	if hostURL == "" {
 		return nil, errors.New(blankHostErrMsg)
@@ -80,6 +87,8 @@ func NewProvider(hostURL string, opts ...Option) (*Provider, error) {
 func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	p.Lock()
 	defer p.Unlock()
+
+	name = strings.ToLower(name)
 
 	if p.dbPrefix != "" {
 		name = p.dbPrefix + "_" + name
@@ -115,6 +124,8 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 func (p *Provider) CloseStore(name string) error {
 	p.Lock()
 	defer p.Unlock()
+
+	name = strings.ToLower(name)
 
 	if p.dbPrefix != "" {
 		name = p.dbPrefix + "_" + name
@@ -162,6 +173,8 @@ func (c *CouchDBStore) Put(k string, v []byte) error {
 		return errors.New("key and value are mandatory")
 	}
 
+	k = prefix(k)
+
 	var valueToPut []byte
 	if isJSON(v) {
 		valueToPut = []byte(`{"payload":` + string(v) + `}`)
@@ -204,6 +217,8 @@ func (c *CouchDBStore) Get(k string) ([]byte, error) {
 		return nil, errors.New("key is mandatory")
 	}
 
+	k = prefix(k)
+
 	rawDoc := make(map[string]interface{})
 
 	row := c.db.Get(context.Background(), k)
@@ -244,6 +259,8 @@ func (c *CouchDBStore) Delete(k string) error {
 		return errors.New("key is mandatory")
 	}
 
+	k = prefix(k)
+
 	revID, err := c.getRevID(k)
 	if err != nil {
 		return err
@@ -264,6 +281,9 @@ func (c *CouchDBStore) Delete(k string) error {
 
 // Iterator returns iterator for the latest snapshot of the underlying db.
 func (c *CouchDBStore) Iterator(startKey, endKey string) storage.StoreIterator {
+	startKey = prefix(startKey)
+	endKey = prefix(endKey)
+
 	resultRows, err := c.db.AllDocs(context.TODO(), kivik.Options{
 		"startkey":      startKey,
 		"endkey":        strings.ReplaceAll(endKey, storage.EndKeySuffix, kivik.EndKeySuffix),
@@ -304,6 +324,15 @@ func (i *couchDBResultsIterator) Error() error {
 
 // Key returns the key of the current key-value pair.
 func (i *couchDBResultsIterator) Key() []byte {
+	key := i.prefixedKey()
+	if key != nil {
+		return []byte(noPrefix(string(key)))
+	}
+
+	return nil
+}
+
+func (i *couchDBResultsIterator) prefixedKey() []byte {
 	key := i.resultRows.Key()
 	if key != "" {
 		// The returned key is a raw JSON string. It needs to be unescaped:
@@ -330,7 +359,7 @@ func (i *couchDBResultsIterator) Value() []byte {
 		return nil
 	}
 
-	key := i.Key()
+	key := i.prefixedKey()
 
 	v, err := i.store.getStoredValueFromRawDoc(rawDoc, string(key))
 	if err != nil {
@@ -368,4 +397,12 @@ func (c *CouchDBStore) getDataFromAttachment(k string) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+func prefix(k string) string {
+	return keyPrefix + k
+}
+
+func noPrefix(k string) string {
+	return strings.TrimPrefix(k, keyPrefix)
 }

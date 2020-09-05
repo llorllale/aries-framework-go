@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/btcsuite/btcutil/base58"
 	"github.com/google/tink/go/keyset"
 	"github.com/google/tink/go/subtle/random"
 	"github.com/stretchr/testify/require"
@@ -277,8 +276,7 @@ func TestLocalKMS_Success(t *testing.T) {
 		require.NotEmpty(t, newKeyHandle)
 		require.NotEmpty(t, keyID)
 
-		b58KID := base58.Encode([]byte(keyID))
-		ks, ok := storeDB[b58KID]
+		ks, ok := storeDB[keyID]
 		require.True(t, ok)
 		require.NotEmpty(t, ks)
 

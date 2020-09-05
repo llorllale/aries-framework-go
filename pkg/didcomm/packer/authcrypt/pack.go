@@ -22,7 +22,6 @@ import (
 	"github.com/hyperledger/aries-framework-go/pkg/doc/jose"
 	"github.com/hyperledger/aries-framework-go/pkg/kms"
 	"github.com/hyperledger/aries-framework-go/pkg/storage"
-	"github.com/hyperledger/aries-framework-go/pkg/storage/base58wrapper"
 )
 
 // Package authcrypt includes a Packer implementation to build and parse JWE messages using Authcrypt. It allows sending
@@ -69,7 +68,7 @@ func New(ctx packer.Provider, encAlg jose.EncAlg) (*Packer, error) {
 	return &Packer{
 		kms:    k,
 		encAlg: encAlg,
-		store:  base58wrapper.NewBase58StoreWrapper(store),
+		store:  store,
 	}, nil
 }
 

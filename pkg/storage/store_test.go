@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/hyperledger/aries-framework-go/pkg/storage"
@@ -81,10 +82,79 @@ func TestStore(t *testing.T) {
 			require.Error(t, err)
 		})
 
+		t.Run(fmt.Sprintf("[%s] can open store with uppercase letters in name", provider.Name), func(t *testing.T) {
+			name := "UPPERCASE"
+			s, err := provider.OpenStore(name)
+			require.NoError(t, err)
+			require.NotNil(t, s)
+			err = provider.CloseStore(name)
+			require.NoError(t, err)
+		})
+
+		t.Run(fmt.Sprintf("[%s] can put and get keys prefixed with underscore", provider.Name), func(t *testing.T) {
+			s, err := provider.OpenStore(fmt.Sprintf("test_%s", randomString()))
+			require.NoError(t, err)
+			key := "_test_key"
+			expected := []byte(uuid.New().String())
+			err = s.Put(key, expected)
+			require.NoError(t, err)
+			result, err := s.Get(key)
+			require.NoError(t, err)
+			require.Equal(t, expected, result)
+		})
+
+		t.Run(fmt.Sprintf("[%s] can iterate keys prefixed with underscore", provider.Name), func(t *testing.T) {
+			s, err := provider.OpenStore(fmt.Sprintf("test_%s", randomString()))
+			require.NoError(t, err)
+
+			keyTemplate := "_key_%d"
+			expectedKeyValues := make(map[string][]byte)
+
+			for i := 0; i < 20; i++ {
+				key := fmt.Sprintf(keyTemplate, i)
+				val := []byte(uuid.New().String())
+				err = s.Put(key, val)
+				require.NoError(t, err)
+				expectedKeyValues[key] = val
+			}
+
+			iter := s.Iterator("_key", fmt.Sprintf("_key%s", storage.EndKeySuffix))
+			require.NotNil(t, iter)
+
+			defer iter.Release()
+
+			receivedCount := 0
+
+			for iter.Next() {
+				expected, found := expectedKeyValues[string(iter.Key())]
+				require.Truef(t, found, "unexpected key %s", iter.Key())
+				require.Equal(t, expected, iter.Value())
+				receivedCount++
+			}
+
+			require.Equal(t, len(expectedKeyValues), receivedCount)
+		})
+
+		t.Run(fmt.Sprintf("[%s] can delete keys prefixed with underscore", provider.Name), func(t *testing.T) {
+			s, err := provider.OpenStore(fmt.Sprintf("test_%s", randomString()))
+			require.NoError(t, err)
+
+			key := "_test_key"
+
+			err = s.Put(key, []byte(uuid.New().String()))
+			require.NoError(t, err)
+
+			err = s.Delete(key)
+			require.NoError(t, err)
+
+			_, err = s.Get(key)
+			require.True(t, errors.Is(err, storage.ErrDataNotFound))
+		})
+
 		t.Run("Multi store put and get "+provider.Name, func(t *testing.T) {
 			t.Parallel()
 
-			const commonKey = "did:example:1"
+			commonKey := uuid.New().String()
 			data := []byte("value1")
 			// create store 1 & store 2
 			store1, err := provider.OpenStore("store-1")
@@ -106,7 +176,7 @@ func TestStore(t *testing.T) {
 			// get in store 2 - not found
 			doc, err = store2.Get(commonKey)
 			require.Error(t, err)
-			require.Equal(t, err, storage.ErrDataNotFound)
+			require.True(t, errors.Is(err, storage.ErrDataNotFound))
 			require.Empty(t, doc)
 
 			// put in store 2
@@ -221,4 +291,8 @@ func verifyItr(t *testing.T, itr storage.StoreIterator, count int, prefix string
 	require.Empty(t, itr.Key())
 	require.Empty(t, itr.Value())
 	require.Error(t, itr.Error())
+}
+
+func randomString() string {
+	return strings.ReplaceAll(uuid.New().String(), "-", "")
 }

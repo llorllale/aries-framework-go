@@ -30,7 +30,6 @@ import (
 	"github.com/hyperledger/aries-framework-go/pkg/kms/localkms/internal/keywrapper"
 	"github.com/hyperledger/aries-framework-go/pkg/secretlock"
 	"github.com/hyperledger/aries-framework-go/pkg/storage"
-	"github.com/hyperledger/aries-framework-go/pkg/storage/base58wrapper"
 )
 
 const (
@@ -58,18 +57,9 @@ type LocalKMS struct {
 	masterKeyEnvAEAD *aead.KMSEnvelopeAEAD
 }
 
-func newKeyIDWrapperStore(provider storage.Provider) (storage.Store, error) {
-	s, err := provider.OpenStore(Namespace)
-	if err != nil {
-		return nil, err
-	}
-
-	return base58wrapper.NewBase58StoreWrapper(s), nil
-}
-
 // New will create a new (local) KMS service.
 func New(masterKeyURI string, p kms.Provider) (*LocalKMS, error) {
-	store, err := newKeyIDWrapperStore(p.StorageProvider())
+	store, err := p.StorageProvider().OpenStore(Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("new: failed to ceate local kms: %w", err)
 	}
