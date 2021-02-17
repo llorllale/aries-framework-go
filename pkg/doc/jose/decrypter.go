@@ -114,6 +114,7 @@ func (jd *JWEDecrypt) unwrapCEK(recWK []*cryptoapi.RecipientWrappedKey,
 
 		recKH, err := jd.kms.Get(rec.KID)
 		if err != nil {
+			fmt.Printf("unwrapCEK: kms.Get err: %s\n", err.Error())
 			continue
 		}
 
@@ -134,6 +135,8 @@ func (jd *JWEDecrypt) unwrapCEK(recWK []*cryptoapi.RecipientWrappedKey,
 		if err == nil {
 			break
 		}
+
+		fmt.Printf("unwrapCEK: crypto.UnwrapKey err: %s\n", err.Error())
 	}
 
 	if len(cek) == 0 {
